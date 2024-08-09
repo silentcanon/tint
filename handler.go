@@ -104,6 +104,9 @@ type Options struct {
 
 	// Disable color (Default: false)
 	NoColor bool
+
+	// Set to true to preserve time, level, msg, source key in the log (Default: false)
+	PreserveDefaultKeys bool
 }
 
 // NewHandler creates a [slog.Handler] that writes tinted logs to Writer w,
@@ -127,6 +130,7 @@ func NewHandler(w io.Writer, opts *Options) slog.Handler {
 		h.timeFormat = opts.TimeFormat
 	}
 	h.noColor = opts.NoColor
+	h.preserveDefaultKeys = opts.PreserveDefaultKeys
 	return h
 }
 
@@ -139,24 +143,26 @@ type handler struct {
 	mu sync.Mutex
 	w  io.Writer
 
-	addSource   bool
-	level       slog.Leveler
-	replaceAttr func([]string, slog.Attr) slog.Attr
-	timeFormat  string
-	noColor     bool
+	addSource           bool
+	level               slog.Leveler
+	replaceAttr         func([]string, slog.Attr) slog.Attr
+	timeFormat          string
+	noColor             bool
+	preserveDefaultKeys bool
 }
 
 func (h *handler) clone() *handler {
 	return &handler{
-		attrsPrefix: h.attrsPrefix,
-		groupPrefix: h.groupPrefix,
-		groups:      h.groups,
-		w:           h.w,
-		addSource:   h.addSource,
-		level:       h.level,
-		replaceAttr: h.replaceAttr,
-		timeFormat:  h.timeFormat,
-		noColor:     h.noColor,
+		attrsPrefix:         h.attrsPrefix,
+		groupPrefix:         h.groupPrefix,
+		groups:              h.groups,
+		w:                   h.w,
+		addSource:           h.addSource,
+		level:               h.level,
+		replaceAttr:         h.replaceAttr,
+		timeFormat:          h.timeFormat,
+		noColor:             h.noColor,
+		preserveDefaultKeys: h.preserveDefaultKeys,
 	}
 }
 
@@ -173,6 +179,9 @@ func (h *handler) Handle(_ context.Context, r slog.Record) error {
 
 	// write time
 	if !r.Time.IsZero() {
+		if h.preserveDefaultKeys {
+			h.appendKey(buf, slog.TimeKey, "")
+		}
 		val := r.Time.Round(0) // strip monotonic to match Attr behavior
 		if rep == nil {
 			h.appendTime(buf, r.Time)
@@ -188,6 +197,9 @@ func (h *handler) Handle(_ context.Context, r slog.Record) error {
 	}
 
 	// write level
+	if h.preserveDefaultKeys {
+		h.appendKey(buf, slog.LevelKey, "")
+	}
 	if rep == nil {
 		h.appendLevel(buf, r.Level)
 		buf.WriteByte(' ')
@@ -207,6 +219,9 @@ func (h *handler) Handle(_ context.Context, r slog.Record) error {
 				Line:     f.Line,
 			}
 
+			if h.preserveDefaultKeys {
+				h.appendKey(buf, slog.SourceKey, "")
+			}
 			if rep == nil {
 				h.appendSource(buf, src)
 				buf.WriteByte(' ')
@@ -218,6 +233,9 @@ func (h *handler) Handle(_ context.Context, r slog.Record) error {
 	}
 
 	// write message
+	if h.preserveDefaultKeys {
+		h.appendKey(buf, slog.MessageKey, "")
+	}
 	if rep == nil {
 		buf.WriteString(r.Message)
 		buf.WriteByte(' ')

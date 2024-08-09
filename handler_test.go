@@ -352,6 +352,13 @@ func TestHandler(t *testing.T) {
 			},
 			Want: `Nov 10 23:00:00.000 ERR test error=fail`,
 		},
+		{ // https://github.com/lmittmann/tint/issues/65
+			F: func(l *slog.Logger) {
+				l.Error("this is a message", tint.Err(errors.New("context deadline exceeded")))
+			},
+			Opts: &tint.Options{PreserveDefaultKeys: true},
+			Want: `time=Nov 10 23:00:00.000 level=ERR msg=this is a message err="context deadline exceeded"`,
+		},
 	}
 
 	for i, test := range tests {
